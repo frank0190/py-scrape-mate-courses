@@ -1,3 +1,4 @@
+from __future__ import annotations
 from dataclasses import dataclass
 import requests
 from bs4 import BeautifulSoup, Tag
@@ -21,39 +22,45 @@ class Course:
     modules_count: int = 0
 
 
+def safe_get_text(element: Tag | None) -> str:
+    return element.get_text(strip=True) if element else ""
+
+
 def parse_courses(course_block: Tag) -> Course:
+    name_el = course_block.select_one("h3.ProfessionCard_title__m7uno")
+    desc_el = course_block.select_one("p.ProfessionCard_description__K8weo")
+    duration_el = course_block.select_one("p.ProfessionCard_duration__13PwX")
+
     return Course(
-        name=course_block.select_one(
-            "h3.ProfessionCard_title__m7uno").text.strip(),
-        short_description=course_block.select_one(
-            "p.ProfessionCard_description__K8weo").text.strip(),
-        duration=course_block.select_one(
-            "p.ProfessionCard_duration__13PwX").text.strip(),
+        name=safe_get_text(name_el),
+        short_description=safe_get_text(desc_el),
+        duration=safe_get_text(duration_el),
     )
 
 
 def get_all_courses() -> list[Course]:
+    url = f"{URL}/courses"
+    html = get_html(url)
+    soup = BeautifulSoup(html, "html.parser")
+
     courses = []
-    url = URL + "/courses"
-    response = requests.get(url)
-    soup = BeautifulSoup(response.content, "html.parser")
-    for course_block in soup.select(
-            "div.ProfessionCard_content__mPiVi"):
-        courses.append(parse_courses(course_block))
+    for block in soup.select("div.ProfessionCard_content__mPiVi"):
+        courses.append(parse_courses(block))
+
     return courses
 
 
-def save_courses_to_csv(
-        courses: list[Course], output_csv_path: str
-) -> None:
+def save_courses_to_csv(courses: list[Course], output_csv_path: str) -> None:
     with open(output_csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["name", "short_description", "duration"])
+        writer.writerow(["name", "short_description", "duration", "modules_count"])
         for course in courses:
             writer.writerow([
                 course.name,
                 course.short_description,
-                course.duration])
+                course.duration,
+                course.modules_count,
+            ])
 
 
 def main(output_csv_path: str) -> None:
